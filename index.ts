@@ -1,12 +1,18 @@
-import { Connection, PublicKey, Keypair } from '@solana/web3.js'
+import { Connection, PublicKey, Keypair, AccountInfo } from '@solana/web3.js'
 import { Jupiter, RouteInfo } from '@jup-ag/core'
 import bs58 from 'bs58'
 import { AccountLayout, Token, TOKEN_PROGRAM_ID, u64 } from '@solana/spl-token'
-import { JUPITER_WALLET } from '@jup-ag/core/dist/constants'
 import NodeWallet from '@project-serum/anchor/dist/cjs/nodewallet'
-import { ASSOCIATED_PROGRAM_ID } from '@project-serum/anchor/dist/cjs/utils/token'
 
-const INPUT_TOKEN = new PublicKey('4dmKkXNHdgYsXqBHCuMikNQWwVomZURhYvkkX5c4pQ7y')
+
+type AddressWithMint = {
+  address: PublicKey
+  mint: PublicKey
+}
+
+const INPUT_TOKEN = [
+  new PublicKey('4dmKkXNHdgYsXqBHCuMikNQWwVomZURhYvkkX5c4pQ7y'),
+  new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')]
 const OUTPUT_TOKEN = new PublicKey('83LGLCm7QKpYZbX8q4W2kYWbtt8NJBwbVwEepzkVnJ9y')
 
 const NETWORK = "https://solana-api.projectserum.com"
@@ -32,9 +38,9 @@ const executeSwap = async (jup: Jupiter, bestRoute: RouteInfo, amount: number) =
   }
 }
 
-const getBestRoute = async (jup: Jupiter, amount: number) => {
+const getBestRoute = async (jup: Jupiter, amount: number, mint: PublicKey) => {
   const routes = await jup.computeRoutes({
-    inputMint: INPUT_TOKEN,
+    inputMint: mint,
     outputMint: OUTPUT_TOKEN,
     inputAmount: amount,
     slippage: 1
@@ -59,13 +65,13 @@ const subscibeToAccount = async (pubkey: PublicKey, fn: (amount: u64) => void) =
   })
 }
 
-const checkAndSwap = async (jup: Jupiter, amount: u64) => {
+const checkAndSwap = async (jup: Jupiter, amount: u64, mint: PublicKey) => {
   if (amount.eqn(0)) {
     console.log('zero amount')
     return
   }
 
-  const route = await getBestRoute(jup, amount.toNumber())
+  const route = await getBestRoute(jup, amount.toNumber(), mint)
 
   if (route)
     await executeSwap(jup, route, amount.toNumber())
@@ -80,13 +86,21 @@ const main = async () => {
   console.log(`Mint of token ${INPUT_TOKEN.toString()}`)
   console.log(`checking if account on token exists or creating new one...`)
 
-  const tokenToSwap = new Token(connection, INPUT_TOKEN, TOKEN_PROGRAM_ID, wallet.payer)
-  const account = await tokenToSwap.getOrCreateAssociatedAccountInfo(wallet.publicKey)
+  const accountsFetched: AddressWithMint[] = []
 
-  if (!account)
-    throw new Error('account on token creation failed')
 
-  console.log(`address of an acccount: ${account.address.toString()}`)
+  for (let el of INPUT_TOKEN) {
+    const tokenToSwap = new Token(connection, el, TOKEN_PROGRAM_ID, wallet.payer)
+    const account = await tokenToSwap.getOrCreateAssociatedAccountInfo(wallet.publicKey)
+    console.log(`address of an acccount: ${account.address.toString()}`)
+
+    accountsFetched.push({ address: account.address, mint: account.mint })
+  }
+
+  if (!accountsFetched.length)
+    throw new Error('accounts on token fetching/creation failed')
+
+
 
   const jupiter = await Jupiter.load({
     connection,
@@ -94,7 +108,8 @@ const main = async () => {
     user: userKeypair
   })
 
-  await subscibeToAccount(account.address, (amount: u64) => checkAndSwap(jupiter, amount))
+  for (let el of accountsFetched)
+    await subscibeToAccount(el.address, (amount: u64) => checkAndSwap(jupiter, amount, el.mint))
 }
 
 main()
