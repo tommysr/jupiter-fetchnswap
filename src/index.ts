@@ -4,7 +4,6 @@ import bs58 from 'bs58'
 import { AccountLayout, Token, TOKEN_PROGRAM_ID, u64 } from '@solana/spl-token'
 import NodeWallet from '@project-serum/anchor/dist/cjs/nodewallet'
 
-
 type AddressWithMint = {
   address: PublicKey
   mint: PublicKey
@@ -16,7 +15,7 @@ const INPUT_TOKEN = [
 const OUTPUT_TOKEN = new PublicKey('83LGLCm7QKpYZbX8q4W2kYWbtt8NJBwbVwEepzkVnJ9y')
 
 const NETWORK = "https://solana-api.projectserum.com"
-const connection = new Connection(NETWORK)
+const connection = new Connection(NETWORK, "singleGossip")
 const privateKey = process.env.PRIV_KEY || ''
 const decodedPrivateKey = bs58.decode(privateKey)
 const userKeypair = Keypair.fromSecretKey(decodedPrivateKey)
